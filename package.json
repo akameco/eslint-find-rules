@@ -1,5 +1,5 @@
 {
-  "name": "eslint-find-rules",
+  "name": "@akameco/eslint-find-rules",
   "version": "3.3.1",
   "description": "Find built-in ESLint rules you don't have in your custom config.",
   "main": "dist/lib/rule-finder.js",
