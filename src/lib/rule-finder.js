@@ -1,6 +1,11 @@
 const path = require('path');
 
 const eslint = require('eslint');
+const {
+  normalizePackageName,
+  getShorthandName,
+  getNamespaceFromTerm
+} = require('eslint/lib/util/naming');
 const isAbsolute = require('path-is-absolute');
 const difference = require('./array-diff');
 const getSortedRules = require('./sort-rules');
@@ -30,23 +35,6 @@ function _getCurrentNamesRules(config) {
   return Object.keys(config.rules);
 }
 
-function _normalizePluginName(name) {
-  const scopedRegex = /(@[^/]+)\/(.+)/;
-  const match = scopedRegex.exec(name);
-
-  if (match) {
-    return {
-      module: `${match[1]}/eslint-plugin-${match[2]}`,
-      prefix: match[2]
-    };
-  }
-
-  return {
-    module: `eslint-plugin-${name}`,
-    prefix: name
-  };
-}
-
 function _isDeprecated(rule) {
   return rule && rule.meta && rule.meta.deprecated;
 }
@@ -60,12 +48,17 @@ function _getPluginRules(config) {
   const plugins = config.plugins;
   if (plugins) {
     plugins.forEach(plugin => {
-      const normalized = _normalizePluginName(plugin);
-      const pluginConfig = require(normalized.module);  // eslint-disable-line import/no-dynamic-require
+      const normalized = normalizePackageName(plugin, 'eslint-plugin');
+      const shorthandName = getShorthandName(plugin, 'eslint-plugin');
+      const prefix = shorthandName.replace(
+        getNamespaceFromTerm(shorthandName),
+        ''
+      );
+      const pluginConfig = require(normalized); // eslint-disable-line import/no-dynamic-require
       const rules = pluginConfig.rules === undefined ? {} : pluginConfig.rules;
 
       Object.keys(rules).forEach(ruleName =>
-        pluginRules.set(`${normalized.prefix}/${ruleName}`, rules[ruleName])
+        pluginRules.set(`${prefix}/${ruleName}`, rules[ruleName])
       );
     });
   }
@@ -95,15 +88,25 @@ function RuleFinder(specifiedFile, options) {
 
   const pluginRules = _getPluginRules(config); // eslint-disable-line vars-on-top
   const coreRules = _getCoreRules();
-  const allRules = omitCore ? pluginRules : new Map([...coreRules, ...pluginRules]);
+  const allRules = omitCore ?
+    pluginRules :
+    new Map([...coreRules, ...pluginRules]);
 
   let allRuleNames = [...allRules.keys()];
   let pluginRuleNames = [...pluginRules.keys()];
   if (!includeDeprecated) {
     allRuleNames = _filterRuleNames(allRuleNames, allRules, _notDeprecated);
-    pluginRuleNames = _filterRuleNames(pluginRuleNames, pluginRules, _notDeprecated);
+    pluginRuleNames = _filterRuleNames(
+      pluginRuleNames,
+      pluginRules,
+      _notDeprecated
+    );
   }
-  const deprecatedRuleNames = _filterRuleNames(currentRuleNames, allRules, _isDeprecated);
+  const deprecatedRuleNames = _filterRuleNames(
+    currentRuleNames,
+    allRules,
+    _isDeprecated
+  );
   const dedupedRuleNames = [...new Set(allRuleNames)];
   const unusedRuleNames = difference(dedupedRuleNames, currentRuleNames);
 
